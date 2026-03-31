@@ -54,8 +54,8 @@ def get_colors(img, sat_threshold=35):
             else:
                 results["or"].append(item['coin'])
         
-        final_output = {}
-        for group, coins in results.items():
-            final_output[group] = [{"radius": c['radius']} for c in coins]
-        
-        return final_output
+    final_output = {}
+    for group, coins in results.items():
+        final_output[group] = [{"radius": c['radius']} for c in coins]
+    
+    return final_output
