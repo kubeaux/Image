@@ -1,200 +1,104 @@
-"""
-Détection de pièces en euros - Étapes 1 & 2
-L3 MIAGE - Projet Image
-
-Étape 1 : Prétraitement de l'image
-Étape 2 : Détection des pièces (HoughCircles)
-"""
-
 import cv2
 import numpy as np
-import sys
-from pathlib import Path
 
+img = cv2.imread("test5.jpg")
+output = img.copy()
+h, w = img.shape[:2]
+# --- Prétraitement --- #
+gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) # Conversion en niveaux de gris (nécessaire pour HoughCircles)
+gray = cv2.GaussianBlur(gray, (21, 21), 0) # Flou gaussien pour réduire le bruit et améliorer la détection
+# --- Paramètres adaptatifs --- #
+min_r = int(min(h, w) * 0.04) # Rayon minimum
+max_r = int(min(h, w) * 0.22) # Rayon maximum
+min_dist = min_r * 1.5 # Distance minimum entre deux centres de cercles
+# --- Détection des cercles ---
+circles = cv2.HoughCircles(
+    gray,                   # image en niveaux de gris
+    cv2.HOUGH_GRADIENT,     # méthode de détection
+    dp=1.2,                 # résolution de l'accumulateur
+    minDist=min_dist,       # distance minimale entre cercles
+    param1=80,              # seuil Canny (bordures)
+    param2=35,              # sensibilité (plus haut = moins de faux positifs)
+    minRadius=min_r,        # rayon minimum détecté
+    maxRadius=max_r         # rayon maximum détecté
+)
 
-# ==============================================================
-# ÉTAPE 1 : PRÉTRAITEMENT
-# ==============================================================
-
-def pretraiter_image(chemin_image: str) -> tuple:
+# --- Suppression des doublons --- #
+def nms_circles(circles, overlap_thresh=0.6):
     """
-    Charge et prétraite l'image pour faciliter la détection.
-
-    Retourne :
-        image_originale  : image BGR originale (pour l'affichage final)
-        image_grise      : image en niveaux de gris floutée (pour HoughCircles)
+    Supprime les cercles dont le centre est trop proche d'un cercle plus grand (Non-Maximum Suppression)
     """
-    # Chargement
-    image = cv2.imread(chemin_image)
-    if image is None:
-        raise FileNotFoundError(f"Impossible de charger l'image : {chemin_image}")
-
-    # Redimensionnement si l'image est trop grande (pour accélérer le traitement)
-    # On garde un max de 1200px sur le grand côté
-    hauteur, largeur = image.shape[:2]
-    max_dim = 1200
-    if max(hauteur, largeur) > max_dim:
-        facteur = max_dim / max(hauteur, largeur)
-        nouvelle_largeur = int(largeur * facteur)
-        nouvelle_hauteur = int(hauteur * facteur)
-        image = cv2.resize(image, (nouvelle_largeur, nouvelle_hauteur),
-                           interpolation=cv2.INTER_AREA)
-        print(f"  Image redimensionnée : {largeur}x{hauteur} → {nouvelle_largeur}x{nouvelle_hauteur}")
-
-    # Conversion en niveaux de gris
-    image_grise = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # Flou gaussien pour réduire le bruit (kernel 9x9)
-    # Un kernel plus grand = détection moins sensible aux textures
-    image_flouee = cv2.GaussianBlur(image_grise, (9, 9), 2)
-
-    return image, image_flouee
-
-
-# ==============================================================
-# ÉTAPE 2 : DÉTECTION DES PIÈCES (HoughCircles)
-# ==============================================================
-
-def detecter_pieces(image_flouee: np.ndarray, image_originale: np.ndarray) -> list:
-    """
-    Détecte les cercles (pièces) dans l'image prétraitée.
-
-    Paramètres HoughCircles à comprendre :
-        dp          : résolution de l'accumulateur (1 = même résolution que l'image)
-        minDist     : distance minimale entre deux centres de cercles détectés
-        param1      : seuil haut pour la détection de contours (Canny interne)
-        param2      : seuil de l'accumulateur (plus bas = plus de faux positifs)
-        minRadius   : rayon minimum en pixels
-        maxRadius   : rayon maximum en pixels
-
-    Retourne une liste de cercles (x, y, rayon)
-    """
-    hauteur, largeur = image_flouee.shape[:2]
-
-    # Estimation des rayons min/max selon la taille de l'image
-    # On suppose qu'une pièce fait entre 3% et 30% de la largeur de l'image
-    rayon_min = int(largeur * 0.03)
-    rayon_max = int(largeur * 0.30)
-    distance_min = int(rayon_min * 1.8)  # évite les détections doublées
-
-    print(f"  Rayon min : {rayon_min}px | Rayon max : {rayon_max}px")
-
-    cercles = cv2.HoughCircles(
-        image_flouee,
-        cv2.HOUGH_GRADIENT,
-        dp=1,
-        minDist=distance_min,
-        param1=100,   # seuil Canny (bord fort)
-        param2=30,    # seuil accumulateur (à ajuster selon vos images)
-        minRadius=rayon_min,
-        maxRadius=rayon_max
-    )
-
-    if cercles is None:
-        print("  Aucun cercle détecté. Essayez d'abaisser param2.")
+    if len(circles) == 0:
         return []
+    # Trier par rayon décroissant (on garde les plus grands en priorité)
+    circles = sorted(circles, key=lambda c: c[2], reverse=True)
+    kept = []  # Liste des cercles conservés
+    for c in circles:
+        x1, y1, r1 = c
+        dominated = False
+        # Comparaison avec les cercles déjà gardés
+        for k in kept:
+            x2, y2, r2 = k
+            dist = np.sqrt((x1 - x2)**2 + (y1 - y2)**2) # Distance entre les centres
+            # Si trop proche d'un plus grand → on ignore
+            if dist < r2 * overlap_thresh:
+                dominated = True
+                break
+        # Sinon on garde le cercle
+        if not dominated:
+            kept.append(c)
+    return kept
 
-    # Conversion en entiers
-    cercles = np.round(cercles[0, :]).astype(int)
-    print(f"  {len(cercles)} cercle(s) détecté(s)")
 
-    return cercles
-
-
-# ==============================================================
-# AFFICHAGE DES RÉSULTATS
-# ==============================================================
-
-def afficher_detection(image_originale: np.ndarray, cercles: list, chemin_sortie: str = None):
+def extract_coin_data(img, filtered_circles):
     """
-    Dessine les cercles détectés sur l'image et l'affiche.
-    Sauvegarde optionnelle si chemin_sortie est fourni.
+    Pour chaque cercle détecté, extrait :
+      - roi    : sous-image carrée (bounding box) autour du cercle
+      - mask   : masque binaire circulaire (même taille que le roi)
+      - radius : rayon du cercle (int)
+
+    Retourne une liste de listes : [[roi, mask, radius], ...]
     """
-    image_annotee = image_originale.copy()
+    results = []
+    img_h, img_w = img.shape[:2]
 
-    for i, (x, y, r) in enumerate(cercles):
-        # Cercle détecté (contour en vert)
-        cv2.circle(image_annotee, (x, y), r, (0, 200, 0), 2)
-        # Centre de la pièce (point rouge)
-        cv2.circle(image_annotee, (x, y), 4, (0, 0, 255), -1)
-        # Numéro de la pièce
-        cv2.putText(image_annotee, f"#{i+1}", (x - 15, y - r - 8),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 0), 2)
+    for (x, y, r) in filtered_circles:
+        # --- Calcul de la bounding box (clampée aux bords de l'image) --- #
+        x1 = max(0, x - r)
+        y1 = max(0, y - r)
+        x2 = min(img_w, x + r)
+        y2 = min(img_h, y + r)
+        # --- Extraction du ROI --- #
+        roi = img[y1:y2, x1:x2].copy()
+        # --- Création du masque circulaire --- #
+        roi_h, roi_w = roi.shape[:2]
+        mask = np.zeros((roi_h, roi_w), dtype=np.uint8)
+        # Centre du cercle dans le repère du ROI
+        cx = x - x1
+        cy = y - y1
+        cv2.circle(mask, (cx, cy), r, 255, thickness=-1)  # Cercle plein blanc
+        results.append([roi, mask, r])
+    return results
 
-    # Affichage
-    cv2.imshow("Détection des pièces", image_annotee)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+count = 0
+coin_data = []
+if circles is not None:
+    raw = [(x, y, r) for x, y, r in np.uint16(np.around(circles[0]))]
+    filtered = nms_circles(raw, overlap_thresh=0.6) # Seuil à ajuster selon la densité des pièces
+    coin_data = extract_coin_data(img, filtered)
+    # Dessin des cercles détectés
+    for x, y, r in filtered:
+        cv2.circle(output, (x, y), r, (0, 255, 0), 2)
+        cv2.circle(output, (x, y), 2, (0, 0, 255), 3)
+        count += 1
+print(f"{count} pièce(s) détectée(s)")
 
-    # Sauvegarde
-    if chemin_sortie:
-        cv2.imwrite(chemin_sortie, image_annotee)
-        print(f"  Image annotée sauvegardée : {chemin_sortie}")
+# --- Exemple d'accès aux données --- #
+for i, (roi, mask, radius) in enumerate(coin_data):
+    print(f"Pièce {i+1} : radius={radius}, roi.shape={roi.shape}, mask.shape={mask.shape}")
 
-    return image_annotee
-
-
-# ==============================================================
-# EXTRACTION DES ROIs (Regions of Interest)
-# ==============================================================
-
-def extraire_rois(image_originale: np.ndarray, cercles: list) -> list:
-    """
-    Extrait chaque pièce détectée sous forme de sous-image carrée.
-    Ces ROIs seront utilisées à l'étape 3 pour la classification.
-
-    Retourne une liste de dictionnaires :
-        { 'roi': image_couleur, 'centre': (x, y), 'rayon': r }
-    """
-    hauteur, largeur = image_originale.shape[:2]
-    rois = []
-
-    for (x, y, r) in cercles:
-        # Zone de découpe carrée autour du cercle (avec marge de 5px)
-        marge = 5
-        x1 = max(0, x - r - marge)
-        y1 = max(0, y - r - marge)
-        x2 = min(largeur, x + r + marge)
-        y2 = min(hauteur, y + r + marge)
-
-        roi = image_originale[y1:y2, x1:x2]
-
-        rois.append({
-            'roi': roi,
-            'centre': (x, y),
-            'rayon': r
-        })
-
-    return rois
-
-
-# ==============================================================
-# SCRIPT PRINCIPAL
-# ==============================================================
-
-if __name__ == "__main__":
-    # Récupération du chemin de l'image depuis les arguments
-    if len(sys.argv) < 2:
-        print("Usage : python detection_pieces.py <chemin_image>")
-        print("Exemple : python detection_pieces.py photo_pieces.jpg")
-        sys.exit(1)
-
-    chemin_image = sys.argv[1]
-    chemin_sortie = Path(chemin_image).stem + "_detection.jpg"
-
-    print("\n=== ÉTAPE 1 : Prétraitement ===")
-    image_originale, image_flouee = pretraiter_image(chemin_image)
-
-    print("\n=== ÉTAPE 2 : Détection des pièces ===")
-    cercles = detecter_pieces(image_flouee, image_originale)
-
-    if cercles is not None and len(cercles) > 0:
-        print("\n=== Affichage et extraction des ROIs ===")
-        afficher_detection(image_originale, cercles, chemin_sortie)
-        rois = extraire_rois(image_originale, cercles)
-        print(f"  {len(rois)} ROI(s) extraite(s) → prêtes pour la classification (étape 3)")
-    else:
-        print("\nAucune pièce détectée. Conseils :")
-        print("  - Réduire param2 dans HoughCircles (ex: 20)")
-        print("  - Vérifier l'éclairage de la photo")
-        print("  - Augmenter le flou gaussien (kernel plus grand)")
+cv2.namedWindow("Detection pieces", cv2.WINDOW_NORMAL)
+cv2.resizeWindow("Detection pieces", 800, 600)
+cv2.imshow("Detection pieces", output)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
