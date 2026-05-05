@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-def class_coins(coin_data, sat_threshold=35):
+def class_coins(coin_data, sat_threshold=20):
     """
     Classe les pièces en 4 catégories.
     Attend en entrée : coin_data = [[roi, mask, radius], ...]
@@ -27,8 +27,8 @@ def class_coins(coin_data, sat_threshold=35):
         dist = np.sqrt((x - cx)**2 + (y - cy)**2)
 
         #3. Création des masques radiaux (avec sécurité mask > 0 pour ignorer fond noir)
-        center_mask = (dist < 0.6 * r) & (mask > 0)
-        ring_mask = (dist >= 0.6 * r) & (dist < 0.95 *r) & (mask > 0)
+        center_mask = (dist < 0.5 * r) & (mask > 0)
+        ring_mask = (dist >= 0.7 * r) & (dist < 0.95 *r) & (mask > 0)
         full_mask = (dist < 0.95 * r) & (mask > 0)
 
         #4. Extraction des saturations moyennes
@@ -36,6 +36,8 @@ def class_coins(coin_data, sat_threshold=35):
         s_ring = np.mean(S[ring_mask]) if np.any(ring_mask) else 0
 
         sat_diff = abs(s_center - s_ring)
+        print(f"Pièce r={r}: sat_center={s_center:.1f}, sat_ring={s_ring:.1f}, " 
+              f"sat_diff={sat_diff:.1f}, bicolore={sat_diff > sat_threshold}")
 
         #BICOLORE VS MONOCOLORE
         if sat_diff > sat_threshold:
@@ -46,6 +48,7 @@ def class_coins(coin_data, sat_threshold=35):
         else:
             #Calcul de la teinte (H) moyenne pour différencier Cuivre et Or plus tard
             h_mean = np.mean(H[full_mask]) if np.any(full_mask) else 0
+            print(f"  → h_mean={h_mean:.1f}")
             mono_data.append({'radius': r, 'roi': roi, 'h_mean': h_mean})
         
         #CUIVRE VS OR (OTSU)
@@ -56,7 +59,10 @@ def class_coins(coin_data, sat_threshold=35):
         if np.std(h_values) > 5.0:
             otsu_thresh, _ = cv2.threshold(h_values.reshape(-1, 1), 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
         else:
-            otsu_thresh = 20.0 # Seuil de repli empirique 
+            otsu_thresh = 15.0 # Seuil de repli empirique 
+
+        print(f"\n[Otsu] std={np.std(h_values):.2f}, threshold={otsu_thresh}")
+        print(f"[Otsu] h_values={h_values.tolist()}")
         
         for item in mono_data:
             if item['h_mean'] <= otsu_thresh:

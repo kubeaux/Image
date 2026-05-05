@@ -1,7 +1,6 @@
 import cv2
-# Importation de tes modules
 from detection_pieces import extract_coin_data, nms_circles
-from couleurs import class_coins
+from colors import class_coins
 
 # 1. Lancement de l'étape 1 (Détection)
 img = cv2.imread("test5.jpg")
@@ -17,15 +16,15 @@ circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, dp=1.2, minDist=min_r*1.5,
 
 if circles is not None:
     import numpy as np
-    raw = [(x, y, r) for x, y, r in np.uint16(np.around(circles[0]))]
+    raw = [(int(x), int(y), int(r)) for x, y, r in np.around(circles[0])]
     filtered = nms_circles(raw, overlap_thresh=0.6)
     
-    # Récupération des données formatées : [[roi, mask, radius], ...]
+    # Récupération des données formatées
     coin_data = extract_coin_data(img, filtered)
     print(f"Étape 1 terminée : {len(coin_data)} pièces extraites.")
 
-    # 2. Lancement de l'étape 2 (Ta partie : La Couleur)
-    classes_pieces = class_coins(coin_data, sat_threshold=35)
+    # 2. Lancement de l'étape 2
+    classes_pieces = class_coins(coin_data)
     
     # Affichage du bilan
     print("\n--- RÉSULTATS DE LA CLASSIFICATION ---")

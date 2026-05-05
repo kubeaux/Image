@@ -83,7 +83,7 @@ def extract_coin_data(img, filtered_circles):
 count = 0
 coin_data = []
 if circles is not None:
-    raw = [(x, y, r) for x, y, r in np.uint16(np.around(circles[0]))]
+    raw = [(int(x), int(y), int(r)) for x, y, r in np.around(circles[0])]
     filtered = nms_circles(raw, overlap_thresh=0.6) # Seuil à ajuster selon la densité des pièces
     coin_data = extract_coin_data(img, filtered)
     # Dessin des cercles détectés
@@ -97,8 +97,8 @@ print(f"{count} pièce(s) détectée(s)")
 for i, (roi, mask, radius) in enumerate(coin_data):
     print(f"Pièce {i+1} : radius={radius}, roi.shape={roi.shape}, mask.shape={mask.shape}")
 
-cv2.namedWindow("Detection pieces", cv2.WINDOW_NORMAL)
-cv2.resizeWindow("Detection pieces", 800, 600)
-cv2.imshow("Detection pieces", output)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+# cv2.namedWindow("Detection pieces", cv2.WINDOW_NORMAL)
+# cv2.resizeWindow("Detection pieces", 800, 600)
+# cv2.imshow("Detection pieces", output)
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
