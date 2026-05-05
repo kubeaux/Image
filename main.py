@@ -1,7 +1,7 @@
 import cv2
 # Importation de tes modules
 from detection_pieces import extract_coin_data, nms_circles
-from couleurs import classify_coins
+from couleurs import class_coins
 
 # 1. Lancement de l'étape 1 (Détection)
 img = cv2.imread("test5.jpg")
@@ -25,7 +25,7 @@ if circles is not None:
     print(f"Étape 1 terminée : {len(coin_data)} pièces extraites.")
 
     # 2. Lancement de l'étape 2 (Ta partie : La Couleur)
-    classes_pieces = classify_coins(coin_data, sat_threshold=35)
+    classes_pieces = class_coins(coin_data, sat_threshold=35)
     
     # Affichage du bilan
     print("\n--- RÉSULTATS DE LA CLASSIFICATION ---")

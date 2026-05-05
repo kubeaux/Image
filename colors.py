@@ -49,18 +49,18 @@ def class_coins(coin_data, sat_threshold=35):
             mono_data.append({'radius': r, 'roi': roi, 'h_mean': h_mean})
         
         #CUIVRE VS OR (OTSU)
-        if mono_data:
-            h_values = np.array([item['h_mean'] for item in mono_data], dtype=np.uint8)
+    if mono_data:
+        h_values = np.array([item['h_mean'] for item in mono_data], dtype=np.uint8)
 
-            #Sécurité : Otsu uniquement si on a une vraie variance (bimodalité)
-            if np.std(h_values) > 5.0:
-                otsu_thresh, _ = cv2.threshold(h_values.reshape(-1, 1), 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+        #Sécurité : Otsu uniquement si on a une vraie variance (bimodalité)
+        if np.std(h_values) > 5.0:
+            otsu_thresh, _ = cv2.threshold(h_values.reshape(-1, 1), 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+        else:
+            otsu_thresh = 20.0 # Seuil de repli empirique 
+        
+        for item in mono_data:
+            if item['h_mean'] <= otsu_thresh:
+                res["Cuivre"].append({"radius": item['radius'], "roi": item['roi']})
             else:
-                ostu_thresh = 20.0 #Seuil de repli empirique 
-            
-            for item in mono_data:
-                if item['h_mean'] <= otsu_thresh:
-                    res["Cuivre"].append({"radius": item['radius'], "roi": item['roi']})
-                else:
-                    res["Or"].append({"radius": item['radius'], "roi": item['roi']})
-        return res
+                res["Or"].append({"radius": item['radius'], "roi": item['roi']})
+    return res
